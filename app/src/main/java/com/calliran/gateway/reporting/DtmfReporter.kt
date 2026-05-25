@@ -48,8 +48,11 @@ object DtmfReporter {
 
     fun onReportingCallActive(call: Call) {
         val digits = pendingDuration.toString()
-        BridgeLog.i(TAG, "Reporting call connected — playing DTMF: $digits")
-        playDigits(call, digits, 0)
+        BridgeLog.i(TAG, "Reporting call connected — waiting 5s before sending tones")
+        handler.postDelayed({
+            BridgeLog.i(TAG, "Playing DTMF: $digits")
+            playDigits(call, digits, 0)
+        }, 5000)
     }
 
     private fun playDigits(call: Call, digits: String, index: Int) {
