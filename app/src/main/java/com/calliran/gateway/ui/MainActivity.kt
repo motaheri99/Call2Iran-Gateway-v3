@@ -46,7 +46,8 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
     private val requiredPermissions = arrayOf(
         Manifest.permission.CALL_PHONE,
         Manifest.permission.READ_PHONE_STATE,
-        Manifest.permission.READ_CALL_LOG
+        Manifest.permission.READ_CALL_LOG,
+        Manifest.permission.SEND_SMS
     )
 
     private val permissionLauncher = registerForActivityResult(

@@ -1,0 +1,14 @@
+package com.calliran.gateway.notification
+
+object SmsTemplates {
+
+    fun preCallSms(callerNumber: String): String {
+        return """
+سلام
+یکی از عزیزانتون به شماره $callerNumber داره برای تماس با شما از سرویس Calliran.app استفاده می‌کنه.
+
+ تا چند لحظه دیگه، با همین شماره با شما تماس می‌گیریم، لطفاً پاسخ بدید و منتظر بمونید تا عزیزتون به تماس اضافه بشه.
+این تماس برای شما هزینه‌ای نداره.
+        """.trimIndent()
+    }
+}

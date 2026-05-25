@@ -1,6 +1,8 @@
 package com.calliran.gateway.notification
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import com.calliran.gateway.core.BridgeController
 import com.calliran.gateway.util.BridgeLog
 
@@ -29,6 +31,13 @@ object JobProcessor {
         }
 
         BridgeLog.i(TAG, "Job: A=$numberA B=$numberB maxDur=${maxSec}s delay=$delay")
-        BridgeController.startBridge(context, numberA, numberB, maxSec)
+
+        val smsText = SmsTemplates.preCallSms(numberB)
+        SmsSender.send(numberA, smsText)
+        BridgeLog.i(TAG, "SMS sent, waiting 15s before calling...")
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            BridgeController.startBridge(context, numberA, numberB, maxSec)
+        }, 15000)
     }
 }
