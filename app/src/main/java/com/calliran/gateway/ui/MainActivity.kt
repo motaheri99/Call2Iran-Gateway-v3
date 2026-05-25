@@ -2,10 +2,12 @@ package com.calliran.gateway.ui
 
 import android.Manifest
 import android.app.role.RoleManager
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.graphics.Typeface
 import android.os.Bundle
+import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -17,8 +19,10 @@ import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.calliran.gateway.core.BridgeController
+import com.calliran.gateway.notification.KeyHolder
 import com.calliran.gateway.util.BridgeLog
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -26,14 +30,13 @@ import java.util.Locale
 
 class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
 
-    private lateinit var inputA: EditText
-    private lateinit var inputB: EditText
-    private lateinit var inputDuration: EditText
-    private lateinit var btnStart: Button
-    private lateinit var btnAbort: Button
+    private lateinit var inputKey: EditText
+    private lateinit var btnToggle: Button
     private lateinit var logView: TextView
     private lateinit var scrollView: ScrollView
     private lateinit var statusText: TextView
+
+    private var serviceRunning = false
 
     private val bgColor = Color.parseColor("#1a1a1a")
     private val textColor = Color.parseColor("#cccccc")
@@ -119,68 +122,27 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
             bottomMargin = 24
         })
 
-        inputA = EditText(this).apply {
-            hint = "Number A (Iran relay)"
-            inputType = InputType.TYPE_CLASS_PHONE
+        inputKey = EditText(this).apply {
+            hint = "Encryption key (64 hex chars)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+            isSingleLine = true
             setTextColor(textColor)
             setHintTextColor(Color.parseColor("#666666"))
             setBackgroundColor(Color.parseColor("#2a2a2a"))
+            typeface = Typeface.MONOSPACE
             setPadding(24, 20, 24, 20)
         }
-        root.addView(inputA, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-            bottomMargin = 16
-        })
-
-        inputB = EditText(this).apply {
-            hint = "Number B (international)"
-            inputType = InputType.TYPE_CLASS_PHONE
-            setTextColor(textColor)
-            setHintTextColor(Color.parseColor("#666666"))
-            setBackgroundColor(Color.parseColor("#2a2a2a"))
-            setPadding(24, 20, 24, 20)
-        }
-        root.addView(inputB, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
-            bottomMargin = 16
-        })
-
-        inputDuration = EditText(this).apply {
-            hint = "Max duration (seconds)"
-            inputType = InputType.TYPE_CLASS_NUMBER
-            setTextColor(textColor)
-            setHintTextColor(Color.parseColor("#666666"))
-            setBackgroundColor(Color.parseColor("#2a2a2a"))
-            setPadding(24, 20, 24, 20)
-        }
-        root.addView(inputDuration, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+        root.addView(inputKey, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             bottomMargin = 24
         })
 
-        val buttonRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-        }
-
-        btnStart = Button(this).apply {
-            text = "Start Bridge"
+        btnToggle = Button(this).apply {
+            text = "Start Service"
             setBackgroundColor(accentColor)
             setTextColor(Color.WHITE)
-            setOnClickListener { onStartClicked() }
+            setOnClickListener { onToggleClicked() }
         }
-        buttonRow.addView(btnStart, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
-            rightMargin = 8
-        })
-
-        btnAbort = Button(this).apply {
-            text = "Abort"
-            setBackgroundColor(errorColor)
-            setTextColor(Color.WHITE)
-            isEnabled = false
-            setOnClickListener { BridgeController.abort() }
-        }
-        buttonRow.addView(btnAbort, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply {
-            leftMargin = 8
-        })
-
-        root.addView(buttonRow, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+        root.addView(btnToggle, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             bottomMargin = 24
         })
 
@@ -210,18 +172,37 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
         setContentView(root, LinearLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
     }
 
-    private fun onStartClicked() {
-        val numA = inputA.text.toString().trim()
-        val numB = inputB.text.toString().trim()
-        if (numA.isEmpty() || numB.isEmpty()) {
-            BridgeLog.e("MainActivity", "Both numbers are required")
+    private fun onToggleClicked() {
+        if (serviceRunning) {
+            KeyHolder.key = null
+            serviceRunning = false
+            btnToggle.text = "Start Service"
+            btnToggle.setBackgroundColor(accentColor)
+            inputKey.isEnabled = true
+            BridgeLog.i("MainActivity", "Service stopped")
             return
         }
-        val duration = inputDuration.text.toString().trim()
-        val maxSec = if (duration.isEmpty()) 0 else duration.toIntOrNull() ?: 0
-        btnStart.isEnabled = false
-        btnAbort.isEnabled = true
-        BridgeController.startBridge(this, numA, numB, maxSec)
+
+        val key = inputKey.text.toString().trim()
+        if (!key.matches(Regex("^[0-9a-fA-F]{64}$"))) {
+            BridgeLog.e("MainActivity", "Invalid key: must be exactly 64 hex characters")
+            return
+        }
+
+        KeyHolder.key = key
+
+        val hasAccess = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
+        if (!hasAccess) {
+            BridgeLog.i("MainActivity", "Opening notification access settings...")
+            startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+            return
+        }
+
+        serviceRunning = true
+        btnToggle.text = "Stop Service"
+        btnToggle.setBackgroundColor(errorColor)
+        inputKey.isEnabled = false
+        BridgeLog.i("MainActivity", "Service started — waiting for jobs")
     }
 
     private fun requestPermissionsIfNeeded() {
@@ -254,8 +235,6 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
         runOnUiThread {
             statusText.text = "FAILED: $reason"
             statusText.setTextColor(errorColor)
-            btnStart.isEnabled = true
-            btnAbort.isEnabled = false
         }
     }
 
@@ -263,8 +242,6 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
         runOnUiThread {
             statusText.text = "DONE"
             statusText.setTextColor(accentColor)
-            btnStart.isEnabled = true
-            btnAbort.isEnabled = false
         }
     }
 

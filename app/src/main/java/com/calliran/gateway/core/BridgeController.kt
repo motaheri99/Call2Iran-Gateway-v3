@@ -20,6 +20,8 @@ object BridgeController {
     var listener: BridgeListener? = null
     private var active = false
 
+    fun isActive(): Boolean = active
+
     fun startBridge(context: Context, numberA: String, numberB: String, maxDurationSeconds: Int): Boolean {
         if (active) {
             BridgeLog.e(TAG, "Bridge already active, ignoring")
