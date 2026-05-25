@@ -19,7 +19,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.calliran.gateway.core.BridgeController
-import com.calliran.gateway.core.CallBridgeService
 import com.calliran.gateway.util.BridgeLog
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -29,6 +28,7 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
 
     private lateinit var inputA: EditText
     private lateinit var inputB: EditText
+    private lateinit var inputDuration: EditText
     private lateinit var btnStart: Button
     private lateinit var btnAbort: Button
     private lateinit var logView: TextView
@@ -140,6 +140,18 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
             setPadding(24, 20, 24, 20)
         }
         root.addView(inputB, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+            bottomMargin = 16
+        })
+
+        inputDuration = EditText(this).apply {
+            hint = "Max duration (seconds)"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setTextColor(textColor)
+            setHintTextColor(Color.parseColor("#666666"))
+            setBackgroundColor(Color.parseColor("#2a2a2a"))
+            setPadding(24, 20, 24, 20)
+        }
+        root.addView(inputDuration, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             bottomMargin = 24
         })
 
@@ -205,9 +217,11 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
             BridgeLog.e("MainActivity", "Both numbers are required")
             return
         }
+        val duration = inputDuration.text.toString().trim()
+        val maxSec = if (duration.isEmpty()) 0 else duration.toIntOrNull() ?: 0
         btnStart.isEnabled = false
         btnAbort.isEnabled = true
-        BridgeController.startBridge(this, numA, numB)
+        BridgeController.startBridge(this, numA, numB, maxSec)
     }
 
     private fun requestPermissionsIfNeeded() {
@@ -226,21 +240,41 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
         }
     }
 
-    override fun onStateChanged(state: CallBridgeService.State) {
+    override fun onStateChanged(state: String, message: String) {
         runOnUiThread {
-            statusText.text = state.name
+            statusText.text = if (message.isEmpty()) state else "$state — $message"
             statusText.setTextColor(
-                if (state == CallBridgeService.State.BRIDGED) Color.parseColor("#44ff44")
+                if (state == "BRIDGED") Color.parseColor("#44ff44")
                 else accentColor
             )
         }
     }
 
-    override fun onBridgeFinished() {
+    override fun onFailed(reason: String) {
         runOnUiThread {
-            statusText.text = "DONE"
+            statusText.text = "FAILED: $reason"
+            statusText.setTextColor(errorColor)
             btnStart.isEnabled = true
             btnAbort.isEnabled = false
+        }
+    }
+
+    override fun onComplete() {
+        runOnUiThread {
+            statusText.text = "DONE"
+            statusText.setTextColor(accentColor)
+            btnStart.isEnabled = true
+            btnAbort.isEnabled = false
+        }
+    }
+
+    override fun onTimerTick(remainingSeconds: Int) {
+        runOnUiThread {
+            statusText.text = "BRIDGED — ${remainingSeconds}s left"
+            statusText.setTextColor(
+                if (remainingSeconds < 10) errorColor
+                else Color.parseColor("#44ff44")
+            )
         }
     }
 }

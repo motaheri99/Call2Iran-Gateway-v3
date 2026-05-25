@@ -10,20 +10,24 @@ object BridgeController {
     private const val TAG = "BridgeController"
 
     interface BridgeListener {
-        fun onStateChanged(state: CallBridgeService.State)
-        fun onBridgeFinished()
+        fun onStateChanged(state: String, message: String)
+        fun onFailed(reason: String)
+        fun onComplete()
+        fun onTimerTick(remainingSeconds: Int)
     }
 
     var listener: BridgeListener? = null
     private var active = false
 
-    fun startBridge(context: Context, numberA: String, numberB: String) {
+    fun startBridge(context: Context, numberA: String, numberB: String, maxDurationSeconds: Int): Boolean {
         if (active) {
             BridgeLog.e(TAG, "Bridge already active, ignoring")
-            return
+            return false
         }
         active = true
-        BridgeLog.i(TAG, "Starting bridge: A=$numberA B=$numberB")
+        BridgeLog.i(TAG, "Starting bridge: A=$numberA B=$numberB maxDuration=${maxDurationSeconds}s")
+
+        CallBridgeService.pendingMaxDuration = maxDurationSeconds
 
         val service = CallBridgeService.instance
         if (service != null) {
@@ -36,6 +40,7 @@ object BridgeController {
         val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$numberA"))
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
+        return true
     }
 
     private var pendingNumberB: String? = null
@@ -55,12 +60,22 @@ object BridgeController {
     }
 
     fun onStateChanged(state: CallBridgeService.State) {
-        listener?.onStateChanged(state)
+        listener?.onStateChanged(state.name, "")
+    }
+
+    fun onFailed(reason: String) {
+        BridgeLog.e(TAG, "Bridge failed: $reason")
+        active = false
+        listener?.onFailed(reason)
+    }
+
+    fun onTimerTick(remainingSeconds: Int) {
+        listener?.onTimerTick(remainingSeconds)
     }
 
     fun onBridgeFinished() {
         BridgeLog.i(TAG, "Bridge finished")
         active = false
-        listener?.onBridgeFinished()
+        listener?.onComplete()
     }
 }

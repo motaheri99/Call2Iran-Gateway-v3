@@ -2,6 +2,7 @@ package com.calliran.gateway.core
 
 import android.net.Uri
 import android.os.Bundle
+import android.os.CountDownTimer
 import android.os.Handler
 import android.os.Looper
 import android.telecom.Call
@@ -15,6 +16,7 @@ class CallBridgeService : InCallService() {
         private const val TAG = "CallBridgeService"
         var instance: CallBridgeService? = null
             private set
+        @Volatile var pendingMaxDuration: Int = 0
     }
 
     enum class State {
@@ -26,6 +28,7 @@ class CallBridgeService : InCallService() {
     private var callB: Call? = null
     private var conferenceCall: Call? = null
     private var numberB: String? = null
+    private var durationTimer: CountDownTimer? = null
     private val handler = Handler(Looper.getMainLooper())
 
     private val callbackA = object : Call.Callback() {
@@ -160,6 +163,7 @@ class CallBridgeService : InCallService() {
             if (state == State.MERGING) {
                 BridgeLog.i(TAG, "Post-merge: calls=${calls.size}")
                 transition(State.BRIDGED)
+                startDurationTimer()
                 handler.postDelayed({
                     BridgeLog.i(TAG, "Muting mic")
                     setMuted(true)
@@ -183,8 +187,32 @@ class CallBridgeService : InCallService() {
         }
     }
 
+    private fun startDurationTimer() {
+        val maxDuration = pendingMaxDuration
+        if (maxDuration <= 0) {
+            BridgeLog.d(TAG, "No max duration set, timer skipped")
+            return
+        }
+        BridgeLog.i(TAG, "Timer started: ${maxDuration}s")
+        durationTimer = object : CountDownTimer(maxDuration * 1000L, 1000L) {
+            override fun onTick(millisUntilFinished: Long) {
+                val remaining = (millisUntilFinished / 1000).toInt()
+                BridgeController.onTimerTick(remaining)
+                if (remaining % 10 == 0) {
+                    BridgeLog.d(TAG, "Remaining: ${remaining}s")
+                }
+            }
+            override fun onFinish() {
+                BridgeLog.i(TAG, "Max duration reached — hanging up")
+                tearDown()
+            }
+        }.start()
+    }
+
     private fun tearDown() {
         if (state == State.TEARING_DOWN || state == State.DONE) return
+        durationTimer?.cancel()
+        durationTimer = null
         transition(State.TEARING_DOWN)
         BridgeLog.i(TAG, "Tearing down all calls")
         calls.forEach { c ->
