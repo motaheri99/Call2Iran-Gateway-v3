@@ -1,8 +1,9 @@
 package com.calliran.gateway.core
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
+import android.os.Bundle
+import android.telecom.TelecomManager
 import com.calliran.gateway.util.BridgeLog
 
 object BridgeController {
@@ -40,9 +41,15 @@ object BridgeController {
             pendingNumberB = numberB
         }
 
-        val intent = Intent(Intent.ACTION_CALL, Uri.parse("tel:$numberA"))
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        try {
+            val telecom = context.getSystemService(Context.TELECOM_SERVICE) as TelecomManager
+            telecom.placeCall(Uri.fromParts("tel", numberA, null), Bundle())
+        } catch (e: Exception) {
+            BridgeLog.e(TAG, "placeCall failed: ${e.message}")
+            active = false
+            pendingNumberB = null
+            return false
+        }
         return true
     }
 
