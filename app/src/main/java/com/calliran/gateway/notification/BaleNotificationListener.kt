@@ -5,6 +5,7 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.calliran.gateway.core.BridgeController
 import com.calliran.gateway.util.BridgeLog
+import com.calliran.gateway.watchdog.PingTracker
 
 class BaleNotificationListener : NotificationListenerService() {
 
@@ -34,6 +35,13 @@ class BaleNotificationListener : NotificationListenerService() {
         if (!title.contains("Call Iran", ignoreCase = true)) return
 
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: return
+
+        if (text.startsWith("PING:")) {
+            val pingData = text.removePrefix("PING:").trim()
+            PingTracker.onPingReceived(pingData)
+            return
+        }
+
         if (!text.startsWith("JOB:")) return
 
         val payload = text.removePrefix("JOB:").trim()

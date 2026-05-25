@@ -26,6 +26,8 @@ import com.calliran.gateway.notification.KeyHolder
 import com.calliran.gateway.reporting.DtmfReporter
 import com.calliran.gateway.reporting.ReportingConfig
 import com.calliran.gateway.util.BridgeLog
+import com.calliran.gateway.watchdog.PingTracker
+import com.calliran.gateway.watchdog.WatchdogConfig
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -34,6 +36,7 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
 
     private lateinit var inputKey: EditText
     private lateinit var inputReportingNumber: EditText
+    private lateinit var inputEmergencyNumber: EditText
     private lateinit var btnToggle: Button
     private lateinit var logView: TextView
     private lateinit var scrollView: ScrollView
@@ -149,6 +152,18 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
             setPadding(24, 20, 24, 20)
         }
         root.addView(inputReportingNumber, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
+            bottomMargin = 16
+        })
+
+        inputEmergencyNumber = EditText(this).apply {
+            hint = "Emergency number (watchdog)"
+            inputType = InputType.TYPE_CLASS_PHONE
+            setTextColor(textColor)
+            setHintTextColor(Color.parseColor("#666666"))
+            setBackgroundColor(Color.parseColor("#2a2a2a"))
+            setPadding(24, 20, 24, 20)
+        }
+        root.addView(inputEmergencyNumber, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
             bottomMargin = 24
         })
 
@@ -192,12 +207,15 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
         if (serviceRunning) {
             KeyHolder.key = null
             ReportingConfig.reportingNumber = null
+            WatchdogConfig.emergencyNumber = null
             DtmfReporter.cancelPendingRetries()
+            PingTracker.stop()
             serviceRunning = false
             btnToggle.text = "Start Service"
             btnToggle.setBackgroundColor(accentColor)
             inputKey.isEnabled = true
             inputReportingNumber.isEnabled = true
+            inputEmergencyNumber.isEnabled = true
             BridgeLog.i("MainActivity", "Service stopped")
             return
         }
@@ -211,6 +229,8 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
         KeyHolder.key = key
         val reportNum = inputReportingNumber.text.toString().trim()
         ReportingConfig.reportingNumber = reportNum.ifEmpty { null }
+        val emergencyNum = inputEmergencyNumber.text.toString().trim()
+        WatchdogConfig.emergencyNumber = emergencyNum.ifEmpty { null }
 
         val hasAccess = NotificationManagerCompat.getEnabledListenerPackages(this).contains(packageName)
         if (!hasAccess) {
@@ -219,11 +239,14 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
             return
         }
 
+        PingTracker.start(this)
+
         serviceRunning = true
         btnToggle.text = "Stop Service"
         btnToggle.setBackgroundColor(errorColor)
         inputKey.isEnabled = false
         inputReportingNumber.isEnabled = false
+        inputEmergencyNumber.isEnabled = false
         BridgeLog.i("MainActivity", "Service started — waiting for jobs")
     }
 

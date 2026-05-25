@@ -10,6 +10,7 @@ import android.telecom.InCallService
 import android.telecom.TelecomManager
 import com.calliran.gateway.reporting.DtmfReporter
 import com.calliran.gateway.util.BridgeLog
+import com.calliran.gateway.watchdog.WatchdogAction
 
 class CallBridgeService : InCallService() {
 
@@ -55,6 +56,18 @@ class CallBridgeService : InCallService() {
         }
     }
 
+    private val watchdogCallback = object : Call.Callback() {
+        override fun onStateChanged(call: Call, state: Int) {
+            when (state) {
+                Call.STATE_ACTIVE -> WatchdogAction.onCallConnected(call)
+                Call.STATE_DISCONNECTED -> {
+                    call.unregisterCallback(this)
+                    WatchdogAction.onCallEnded()
+                }
+            }
+        }
+    }
+
     private val reportingCallback = object : Call.Callback() {
         override fun onStateChanged(call: Call, newState: Int) {
             when (newState) {
@@ -90,6 +103,12 @@ class CallBridgeService : InCallService() {
         if (DtmfReporter.isReporting) {
             BridgeLog.d(TAG, "Reporting call added")
             call.registerCallback(reportingCallback)
+            return
+        }
+
+        if (WatchdogAction.isWatchdogCalling) {
+            BridgeLog.d(TAG, "Watchdog call added")
+            call.registerCallback(watchdogCallback)
             return
         }
 
