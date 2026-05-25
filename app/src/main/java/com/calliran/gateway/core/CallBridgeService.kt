@@ -8,6 +8,7 @@ import android.os.Looper
 import android.telecom.Call
 import android.telecom.InCallService
 import android.telecom.TelecomManager
+import com.calliran.gateway.reporting.DtmfReporter
 import com.calliran.gateway.util.BridgeLog
 
 class CallBridgeService : InCallService() {
@@ -54,6 +55,20 @@ class CallBridgeService : InCallService() {
         }
     }
 
+    private val reportingCallback = object : Call.Callback() {
+        override fun onStateChanged(call: Call, newState: Int) {
+            when (newState) {
+                Call.STATE_ACTIVE -> DtmfReporter.onReportingCallActive(call)
+                Call.STATE_DISCONNECTED -> {
+                    call.unregisterCallback(this)
+                    if (DtmfReporter.isReporting) {
+                        DtmfReporter.onReportingCallFailed()
+                    }
+                }
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         instance = this
@@ -71,6 +86,12 @@ class CallBridgeService : InCallService() {
         super.onCallAdded(call)
         val number = call.details?.handle?.schemeSpecificPart ?: "unknown"
         BridgeLog.i(TAG, "onCallAdded: $number state=${callStateStr(call.state)} total=${calls.size}")
+
+        if (DtmfReporter.isReporting) {
+            BridgeLog.d(TAG, "Reporting call added")
+            call.registerCallback(reportingCallback)
+            return
+        }
 
         if (call.details?.hasProperty(Call.Details.PROPERTY_CONFERENCE) == true) {
             BridgeLog.i(TAG, "Conference parent detected, tracking")

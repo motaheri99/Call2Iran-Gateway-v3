@@ -4,6 +4,8 @@ import android.content.Context
 import android.net.Uri
 import android.os.Bundle
 import android.telecom.TelecomManager
+import com.calliran.gateway.reporting.DtmfReporter
+import com.calliran.gateway.reporting.ReportingConfig
 import com.calliran.gateway.util.BridgeLog
 
 object BridgeController {
@@ -20,6 +22,7 @@ object BridgeController {
 
     var listener: BridgeListener? = null
     private var active = false
+    private var appContext: Context? = null
 
     fun isActive(): Boolean = active
 
@@ -29,6 +32,7 @@ object BridgeController {
             return false
         }
         active = true
+        appContext = context.applicationContext
         BridgeLog.i(TAG, "Starting bridge: A=$numberA B=$numberB maxDuration=${maxDurationSeconds}s")
 
         CallBridgeService.pendingMaxDuration = maxDurationSeconds
@@ -90,6 +94,13 @@ object BridgeController {
         listener?.onComplete()
         if (result != null) {
             listener?.onBridgeDuration(result.durationSeconds)
+            val reportNum = ReportingConfig.reportingNumber
+            if (!reportNum.isNullOrBlank()) {
+                val ctx = appContext
+                if (ctx != null) {
+                    DtmfReporter.reportDuration(ctx, result.durationSeconds)
+                }
+            }
         }
     }
 }
