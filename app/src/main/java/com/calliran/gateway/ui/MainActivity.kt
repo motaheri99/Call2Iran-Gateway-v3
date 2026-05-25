@@ -277,4 +277,11 @@ class MainActivity : AppCompatActivity(), BridgeController.BridgeListener {
             )
         }
     }
+
+    override fun onBridgeDuration(durationSeconds: Int) {
+        runOnUiThread {
+            statusText.text = "DONE — ${durationSeconds}s call"
+            BridgeLog.i("MainActivity", "Call duration: ${durationSeconds}s")
+        }
+    }
 }

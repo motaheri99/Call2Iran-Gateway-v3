@@ -27,8 +27,11 @@ class CallBridgeService : InCallService() {
     private var callA: Call? = null
     private var callB: Call? = null
     private var conferenceCall: Call? = null
+    private var numberA: String? = null
     private var numberB: String? = null
     private var durationTimer: CountDownTimer? = null
+    private var bridgeStartTime: Long = 0L
+    private var endReason: String = "hangup"
     private val handler = Handler(Looper.getMainLooper())
 
     private val callbackA = object : Call.Callback() {
@@ -87,6 +90,7 @@ class CallBridgeService : InCallService() {
         when (state) {
             State.IDLE, State.DIALING_A -> {
                 callA = call
+                numberA = number
                 call.registerCallback(callbackA)
                 transition(State.DIALING_A)
                 if (call.state == Call.STATE_ACTIVE) onCallAActive()
@@ -163,6 +167,8 @@ class CallBridgeService : InCallService() {
             if (state == State.MERGING) {
                 BridgeLog.i(TAG, "Post-merge: calls=${calls.size}")
                 transition(State.BRIDGED)
+                bridgeStartTime = System.currentTimeMillis()
+                BridgeLog.i(TAG, "Bridge timer started")
                 startDurationTimer()
                 handler.postDelayed({
                     BridgeLog.i(TAG, "Muting mic")
@@ -204,6 +210,7 @@ class CallBridgeService : InCallService() {
             }
             override fun onFinish() {
                 BridgeLog.i(TAG, "Max duration reached — hanging up")
+                endReason = "max_duration"
                 tearDown()
             }
         }.start()
@@ -214,6 +221,22 @@ class CallBridgeService : InCallService() {
         durationTimer?.cancel()
         durationTimer = null
         transition(State.TEARING_DOWN)
+
+        val now = System.currentTimeMillis()
+        if (bridgeStartTime > 0) {
+            val durationSec = ((now - bridgeStartTime) / 1000).toInt()
+            BridgeLog.i(TAG, "Bridge lasted ${durationSec}s")
+            val result = BridgeResult(
+                numberA = numberA ?: "unknown",
+                numberB = numberB ?: "unknown",
+                bridgeStartTime = bridgeStartTime,
+                bridgeEndTime = now,
+                durationSeconds = durationSec,
+                endReason = endReason
+            )
+            BridgeResultHolder.save(result)
+        }
+
         BridgeLog.i(TAG, "Tearing down all calls")
         calls.forEach { c ->
             if (c.state != Call.STATE_DISCONNECTED) {
@@ -225,13 +248,17 @@ class CallBridgeService : InCallService() {
         callA = null
         callB = null
         conferenceCall = null
+        numberA = null
         numberB = null
+        bridgeStartTime = 0L
+        endReason = "hangup"
         transition(State.DONE)
         BridgeController.onBridgeFinished()
     }
 
     fun abort() {
         BridgeLog.i(TAG, "Abort requested")
+        endReason = "abort"
         tearDown()
     }
 

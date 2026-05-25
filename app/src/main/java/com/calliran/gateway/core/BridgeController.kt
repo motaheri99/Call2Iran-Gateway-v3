@@ -14,6 +14,7 @@ object BridgeController {
         fun onFailed(reason: String)
         fun onComplete()
         fun onTimerTick(remainingSeconds: Int)
+        fun onBridgeDuration(durationSeconds: Int)
     }
 
     var listener: BridgeListener? = null
@@ -76,6 +77,10 @@ object BridgeController {
     fun onBridgeFinished() {
         BridgeLog.i(TAG, "Bridge finished")
         active = false
+        val result = BridgeResultHolder.lastResult
         listener?.onComplete()
+        if (result != null) {
+            listener?.onBridgeDuration(result.durationSeconds)
+        }
     }
 }
